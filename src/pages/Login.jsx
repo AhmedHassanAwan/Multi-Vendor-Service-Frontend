@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
+import { useLoginMutation } from '../store/api/authApi';
+import { setCredentials } from '../store/authSlice';
 import AuthCard from '../components/auth/AuthCard';
 import InputField from '../components/auth/InputField';
 import { HiEnvelope, HiLockClosed, HiEye, HiEyeSlash, HiArrowRight } from 'react-icons/hi2';
@@ -7,12 +10,17 @@ import { FaGoogle, FaApple, FaHexagonNodes } from 'react-icons/fa6';
 
 const Login = () => {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const [loginUser, { isLoading }] = useLoginMutation();
+
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     showPassword: false,
     rememberMe: false
   });
+
+  const [formError, setFormError] = useState('');
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -26,10 +34,31 @@ const Login = () => {
     setFormData(prev => ({ ...prev, showPassword: !prev.showPassword }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const { email, password } = formData;
-    console.log({ email, password });
+    setFormError('');
+
+    try {
+      const result = await loginUser({
+        email: formData.email,
+        password: formData.password
+      }).unwrap();
+
+      // Dispatch user credentials to auth store
+      dispatch(setCredentials({ user: result.user, token: result.token }));
+
+      // Redirect depending on role and profile completion
+    if (result.user.role === 'provider') {
+    navigate(result.user.isProfileComplete ? '/dashboard/provider' : '/provider/setup');
+  } else if (result.user.role === 'customer') {
+    navigate('/'); // ✅ customer → home
+  } else if (result.user.role === 'admin') {
+    navigate('/dashboard/admin');
+  }
+    } catch (err) {
+      console.error(err);
+      setFormError(err.data?.message || 'Invalid email or password. Please try again.');
+    }
   };
 
   return (
@@ -92,11 +121,20 @@ const Login = () => {
             </label>
           </div>
 
+          {formError && (
+            <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-[13px] font-semibold text-center">
+              {formError}
+            </div>
+          )}
+
           <button
             type="submit"
-            className="w-full h-12 bg-[#1DBF73] text-white font-bold rounded-lg hover:bg-[#19a463] transition-all duration-200 shadow-lg shadow-[#1DBF73]/20 flex items-center justify-center gap-2"
+            disabled={isLoading}
+            className={`w-full h-12 bg-[#1DBF73] text-white font-bold rounded-lg hover:bg-[#19a463] transition-all duration-200 shadow-lg shadow-[#1DBF73]/20 flex items-center justify-center gap-2 ${
+              isLoading ? 'opacity-70 cursor-not-allowed' : ''
+            }`}
           >
-            Login
+            {isLoading ? 'Logging in...' : 'Login'}
             <HiArrowRight className="text-lg stroke-[1.5]" />
           </button>
 

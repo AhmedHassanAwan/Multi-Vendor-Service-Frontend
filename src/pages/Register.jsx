@@ -1,11 +1,17 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
+import { useRegisterMutation } from '../store/api/authApi';
+import { setCredentials } from '../store/authSlice';
 import AuthCard from '../components/auth/AuthCard';
 import InputField from '../components/auth/InputField';
 import { FaHexagonNodes } from 'react-icons/fa6';
 
 const Register = () => {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const [registerUser, { isLoading }] = useRegisterMutation();
+  
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -14,6 +20,8 @@ const Register = () => {
     role: 'customer', // 'customer' for Buyer, 'provider' for Seller
     agreeToTerms: false
   });
+
+  const [formError, setFormError] = useState('');
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -27,10 +35,41 @@ const Register = () => {
     setFormData(prev => ({ ...prev, role }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const { name, email, password, role } = formData;
-    console.log({ name, email, password, role });
+    setFormError('');
+
+    if (formData.password !== formData.confirmPassword) {
+      setFormError('Passwords do not match');
+      return;
+    }
+
+    try {
+      const result = await registerUser({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        role: formData.role
+      }).unwrap();
+
+      
+      dispatch(setCredentials({ user: result.user, token: result.token }));
+
+      // Redirect depending on role
+      if (result.user.role === 'provider') {
+  navigate('/provider-setup'); // ya '/provider/setup' — jo App.jsx mein hai
+} else if (result.user.role === 'customer') {
+  navigate('/login'); // ✅ customer → login page
+}
+    } catch (err) {
+      console.error(err);
+      // Format validation errors or regular errors from backend
+      if (err.data && err.data.errors) {
+        setFormError(err.data.errors.map(e => e.message).join(', '));
+      } else {
+        setFormError(err.data?.message || 'Registration failed. Please try again.');
+      }
+    }
   };
 
   return (
@@ -126,11 +165,20 @@ const Register = () => {
             </label>
           </div>
 
+          {formError && (
+            <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-[13px] font-semibold text-center">
+              {formError}
+            </div>
+          )}
+
           <button
             type="submit"
-            className="w-full h-12 bg-[#1DBF73] text-white font-bold rounded-lg hover:bg-[#19a463] transition-colors shadow-md mt-2"
+            disabled={isLoading}
+            className={`w-full h-12 bg-[#1DBF73] text-white font-bold rounded-lg hover:bg-[#19a463] transition-colors shadow-md mt-2 flex items-center justify-center gap-2 ${
+              isLoading ? 'opacity-70 cursor-not-allowed' : ''
+            }`}
           >
-            Create Account
+            {isLoading ? 'Creating Account...' : 'Create Account'}
           </button>
         </form>
 
